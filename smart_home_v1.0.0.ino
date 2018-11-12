@@ -11,6 +11,11 @@
 #define MEM_TIMER 4
 #define MEM_IO_STATE 5
 
+//By IO_Manager
+#define IO_TOGGLE 2
+#define IO_ON 1
+#define IO_OFF 0 
+
 
 /* memory_Manager reads and writes into EEPROM
  * data = "" for reading, data != "" for writing
@@ -52,16 +57,67 @@ String memory_Manager (String data, int type, int index) {
   return response;  
 }
 
+/* IO_Manager sets the IO pins and calls memory_Manager to read & write config
+ * stage - IO_TOGGLE for Toggle, IO_ON for on & IO_OFF for off for String data IOs
+*/
+bool IO_Manager (String data, int stage) {
+  static int ON = 0;
+  static int OFF = 1;
+  char io_get[8];
+  char io_new[8];
+  char io_old[8];
+  String io_write = "";
+  String io_read = memory_Manager ("", MEM_IO_STATE, 0);  //Read previous config from EEPROM
+  strcpy (io_get, data.c_str());
+  strcpy (io_old, io_read.c_str());
+  
+  //Generate new config into 'io_new' from 'io_get', 'io_old' & 'stage'
+  for (int i = 0; i < 8; i++) {
+    if (io_get[i] == '0') io_new[i] = io_old[i];
+    else if (io_get[i] == '1')  {
+      switch (stage) {
+        case IO_TOGGLE: (io_old[i] == '1')? io_new[i] = '0': io_new[i] = '1'; break;
+        case IO_ON: io_new[i] = '1'; break;
+        case IO_OFF: io_new[i] = '0'; break;  
+      }
+    }
+  }
+  for (int i = 0; i< 8; i++) io_write += io_new[i];
 
+  //Set IO Pins
+  (io_new[0] == '0')? digitalWrite (D0, OFF): digitalWrite (D0, ON);
+  (io_new[1] == '0')? digitalWrite (D1, OFF): digitalWrite (D1, ON);
+  (io_new[2] == '0')? digitalWrite (D2, OFF): digitalWrite (D2, ON);
+  (io_new[3] == '0')? digitalWrite (D3, OFF): digitalWrite (D3, ON);
+  (io_new[4] == '0')? digitalWrite (D5, OFF): digitalWrite (D5, ON);
+  (io_new[5] == '0')? digitalWrite (D6, OFF): digitalWrite (D6, ON);
+  (io_new[6] == '0')? digitalWrite (D7, OFF): digitalWrite (D7, ON);
+  (io_new[7] == '0')? digitalWrite (D8, OFF): digitalWrite (D8, ON);
+  
+  memory_Manager (io_write, MEM_IO_STATE, 0); //Write new Config into EEPROM
+  return false;  
+}
 
 void setup() {
   EEPROM.begin(512);
   Serial.begin(115200);
+  pinMode (D0, OUTPUT);
+  pinMode (D1, OUTPUT);
+  pinMode (D2, OUTPUT);
+  pinMode (D3, OUTPUT);
+  pinMode (D4, OUTPUT);
+  pinMode (D5, OUTPUT);
+  pinMode (D6, OUTPUT);
+  pinMode (D7, OUTPUT);
+  pinMode (D8, OUTPUT);
+
+  
 }
 
 void loop() {
   
 }
+
 
 
 
