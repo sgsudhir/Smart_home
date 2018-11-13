@@ -16,6 +16,9 @@
 #define IO_ON 1
 #define IO_OFF 0 
 
+//By set_Timer
+#define FREE_TIMER (String) "999999999999999"
+
 
 /* memory_Manager reads and writes into EEPROM
  * data = "" for reading, data != "" for writing
@@ -33,7 +36,7 @@ String memory_Manager (String data, int type, int index) {
     case 1: start_bit = 0; stop_bit = 4; len = 5; break;
     case 2: start_bit = 11; stop_bit = 50; len = 40; break;
     case 3: start_bit = 51; stop_bit = 80; len = 30; break;
-    case 4: if (index > 10 || index < 0) break; start_bit = index * 15 + 101; stop_bit = start_bit + 14; len = 15; break;
+    case 4: if (index > 9 || index < 0) break; start_bit = index * 15 + 101; stop_bit = start_bit + 14; len = 15; break;
     case 5: start_bit = 291; stop_bit = 300; len = 10; break;
   }
   if (data == "") {
@@ -98,6 +101,30 @@ bool IO_Manager (String data, int stage) {
   return false;  
 }
 
+/* 
+ * timer_Manager sets & deletes timer
+ * String data = "" - read, FREE_TIMER - erase timer at index, else set timer
+ * returns String timer if String data == "" else returns "".
+*/ 
+String timer_Manager (String data, int index) {
+  if (data == "") return memory_Manager ("", MEM_TIMER, index);
+  if (data == FREE_TIMER) return memory_Manager (FREE_TIMER, MEM_TIMER, index);
+  
+  bool flag = false;
+  int i = 0;
+  for (i = 0; i < 10; i++) {
+    if (FREE_TIMER == memory_Manager ("", MEM_TIMER, i)) {
+      flag = true;
+      break;
+    }
+  }
+  if (flag) index = i; else index = 9;
+  memory_Manager (data, MEM_TIMER, index);
+  
+  return "";
+}
+
+
 void setup() {
   EEPROM.begin(512);
   Serial.begin(115200);
@@ -115,7 +142,7 @@ void setup() {
 }
 
 void loop() {
-  
+ 
 }
 
 
