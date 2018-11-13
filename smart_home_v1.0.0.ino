@@ -19,7 +19,6 @@
 //By set_Timer
 #define FREE_TIMER (String) "999999999999999"
 
-
 /* memory_Manager reads and writes into EEPROM
  * data = "" for reading, data != "" for writing
  * type - Operation type
@@ -37,7 +36,7 @@ String memory_Manager (String data, int type, int index) {
     case 2: start_bit = 11; stop_bit = 50; len = 40; break;
     case 3: start_bit = 51; stop_bit = 80; len = 30; break;
     case 4: if (index > 9 || index < 0) break; start_bit = index * 15 + 101; stop_bit = start_bit + 14; len = 15; break;
-    case 5: start_bit = 291; stop_bit = 300; len = 10; break;
+    case 5: start_bit = 291; stop_bit = 298; len = 8; break;
   }
   if (data == "") {
     //Read Command
@@ -53,11 +52,30 @@ String memory_Manager (String data, int type, int index) {
     memset (char_data, 0, sizeof (char_data));
     strcpy (char_data, data.c_str());
     cur = 0;
-    for (int i = start_bit; i <= stop_bit; i++)
+    if (type == MEM_SSID || type == MEM_PSSWD)
+      for (int i = start_bit; i <= stop_bit; i++)
+        EEPROM.write (i, '`'); // Initialize SSID or Psswd into EEPROM
+    for (int i = start_bit; i <= stop_bit || i <= strlen (char_data); i++)
       EEPROM.write (start_bit + cur, (int) char_data[cur++]);
   }
   if (data != "") EEPROM.commit();
   return response;  
+}
+
+/*
+ * sys_Reset is used for Factory Reset data
+ * bool clean - Also reFormat EEPROM
+*/
+void sys_Reset (bool clean) {
+  if (!clean) { ESP.reset (); return; }
+  for (int i = 0; i < 10; i++)
+    memory_Manager (FREE_TIMER, MEM_TIMER, i); // Initialize Timer into EEPROM
+  for (int i = 11; i <= 100; i++)
+    EEPROM.write (i, '`'); // Initialize SSID, Psswd into EEPROM
+  EEPROM.commit ();
+  memory_Manager ("12345", MEM_SIGN, 0); // Write Signature into EEPROM
+  memory_Manager ("00000000", MEM_IO_STATE, 0); // Initialize IO_State into EEPROM
+  ESP.reset ();
 }
 
 /* IO_Manager sets the IO pins and calls memory_Manager to read & write config
@@ -137,12 +155,11 @@ void setup() {
   pinMode (D6, OUTPUT);
   pinMode (D7, OUTPUT);
   pinMode (D8, OUTPUT);
-
   
 }
 
 void loop() {
- 
+   
 }
 
 
