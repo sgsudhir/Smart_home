@@ -3,6 +3,7 @@
 #include <ESP8266WebServer.h>
 #include <time.h>
 #include <string.h>
+#include <ESP8266mDNS.h>
 
 //By memory_Manager
 #define MEM_SIGN 1
@@ -18,6 +19,15 @@
 
 //By set_Timer
 #define FREE_TIMER (String) "999999999999999"
+
+//By NET_Manager
+#define NET_FAIL 0
+#define NET_STA 1
+#define NET_AP 2
+#define NET_STA_AP 3
+int netType = NET_FAIL;
+
+int cd = 0;
 
 /* memory_Manager reads and writes into EEPROM
  * data = "" for reading, data != "" for writing
@@ -76,6 +86,38 @@ void sys_Reset (bool clean) {
   memory_Manager ("12345", MEM_SIGN, 0); // Write Signature into EEPROM
   memory_Manager ("00000000", MEM_IO_STATE, 0); // Initialize IO_State into EEPROM
   ESP.reset ();
+}
+
+/*
+ * NET_Manager activates AP mode or Station mode.
+ * returns current activated mode
+ * type - NET_STA or NET_AP to activate Station or AP mode respectively 
+*/
+int NET_Manager (int type) {
+  if (type == NET_STA) { // Turn on STA mode
+    if ((netType == NET_STA) && (WiFi.reconnect()) && (WiFi.status() == WL_CONNECTED)) return NET_STA;
+    WiFi.mode (WIFI_STA);
+    netType = NET_FAIL;
+    WiFi.begin (memory_Manager ("", MEM_SSID, 0).c_str(), memory_Manager ("", MEM_PSSWD, 0).c_str());
+    int count = 0;
+    while (WiFi.status() != WL_CONNECTED) {
+      delay (1000);
+      if (count++ >= 30) return NET_FAIL;
+    }
+    netType = NET_STA;
+    return NET_STA;
+  } else if (type == NET_AP) { // Turn on AP mode
+    if (netType == NET_AP) return NET_AP;
+    WiFi.disconnect(true);
+    WiFi.mode (WIFI_AP);
+    netType = NET_FAIL;
+    if (WiFi.softAP("IOT_ESP_IO-1", "nodemcuesp8266")) {
+      netType = NET_AP; 
+      return NET_AP;
+    }
+    
+  }
+  return NET_FAIL;
 }
 
 /* IO_Manager sets the IO pins and calls memory_Manager to read & write config
@@ -155,11 +197,12 @@ void setup() {
   pinMode (D6, OUTPUT);
   pinMode (D7, OUTPUT);
   pinMode (D8, OUTPUT);
-  
+
 }
 
+
 void loop() {
-   
+  
 }
 
 
