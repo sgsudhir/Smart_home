@@ -27,7 +27,9 @@
 #define NET_STA_AP 3
 int netType = NET_FAIL;
 
-int cd = 0;
+//By internet_Time
+bool timeInit = false; 
+
 
 /* memory_Manager reads and writes into EEPROM
  * data = "" for reading, data != "" for writing
@@ -120,6 +122,37 @@ int NET_Manager (int type) {
   return NET_FAIL;
 }
 
+
+String internet_Time () {
+  if (!timeInit) {
+    configTime(5 * 3600, 30 * 60, "pool.ntp.org","time.nist.gov");
+    int wait = 0;
+    timeInit = true;
+    while(!time(nullptr)){
+      delay(1000);
+      if (wait >= 30) {
+        timeInit = false;
+        return "";
+      }
+      wait++;
+    }
+  } 
+  String hh, mm, ss, dd, mM;
+  int yyyy;
+  time_t now = time(nullptr);
+  struct tm* p_tm = localtime(&now);
+  dd = (String) p_tm->tm_mday;
+  mM = (String) p_tm->tm_mon + 1;
+  yyyy = (int) p_tm->tm_year + 1900;
+  timeInit = false;
+  if (yyyy < 2000) return "";
+  timeInit = true;
+  hh = (String) p_tm->tm_hour;
+  mm = (String) p_tm->tm_min; 
+  ss = (String) p_tm->tm_sec;
+  return (String) (hh + ":" + mm + ":" + ss + ":" + dd);
+}
+
 /* IO_Manager sets the IO pins and calls memory_Manager to read & write config
  * stage - IO_TOGGLE for Toggle, IO_ON for on & IO_OFF for off for String data IOs
 */
@@ -198,10 +231,14 @@ void setup() {
   pinMode (D7, OUTPUT);
   pinMode (D8, OUTPUT);
 
+  NET_Manager (NET_STA);
+
 }
 
 
 void loop() {
+  Serial.println (internet_Time ());
+  delay (1000);
   
 }
 
