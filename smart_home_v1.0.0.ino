@@ -4,6 +4,8 @@
 #include <time.h>
 #include <string.h>
 #include <ESP8266mDNS.h>
+#include "Adafruit_MQTT.h"
+#include "Adafruit_MQTT_Client.h"
 
 //By memory_Manager
 #define MEM_SIGN 1
@@ -11,6 +13,8 @@
 #define MEM_PSSWD 3
 #define MEM_TIMER 4
 #define MEM_IO_STATE 5
+#define MEM_MQTT_USER 6
+#define MEM_MQTT_KEY 7
 
 //By IO_Manager
 #define IO_TOGGLE 2
@@ -30,8 +34,20 @@ int netType = NET_FAIL;
 //By internet_Time
 bool timeInit = false; 
 
+//By MQTT_Manager
+#define MQTT_SERVER "io.adafruit.com"
+#define MQTT_PORT 1883
+#define MQTT_USER "sgsudhir"
+#define MQTT_KEY "0e7a8026688646bb83111ad277fbfd49"
+WiFiClient mqtt_client;
+String memory_Manager (String, int, int);
+Adafruit_MQTT_Client mqtt (&mqtt_client, MQTT_SERVER, MQTT_PORT, MQTT_USER, MQTT_KEY);
+Adafruit_MQTT_Publish from_esp = Adafruit_MQTT_Publish (&mqtt, MQTT_USER "/feeds/from_esp_io_1");
+Adafruit_MQTT_Subscribe to_esp = Adafruit_MQTT_Subscribe (&mqtt, MQTT_USER "/feeds/to_esp_io_1");
 
-/* memory_Manager reads and writes into EEPROM
+
+/* 
+ *  memory_Manager reads and writes into EEPROM
  * data = "" for reading, data != "" for writing
  * type - Operation type
  * index - Incase present like MEM_TIMER
@@ -49,6 +65,8 @@ String memory_Manager (String data, int type, int index) {
     case 3: start_bit = 51; stop_bit = 80; len = 30; break;
     case 4: if (index > 9 || index < 0) break; start_bit = index * 15 + 101; stop_bit = start_bit + 14; len = 15; break;
     case 5: start_bit = 291; stop_bit = 298; len = 8; break;
+    case 6: start_bit = 301; stop_bit = 330; len = 30; break;
+    case 7: start_bit = 331; stop_bit = 370; len = 40; break;
   }
   if (data == "") {
     //Read Command
@@ -64,7 +82,7 @@ String memory_Manager (String data, int type, int index) {
     memset (char_data, 0, sizeof (char_data));
     strcpy (char_data, data.c_str());
     cur = 0;
-    if (type == MEM_SSID || type == MEM_PSSWD)
+    if (type == MEM_SSID || type == MEM_PSSWD || type == MEM_MQTT_USER || type == MEM_MQTT_KEY)
       for (int i = start_bit; i <= stop_bit; i++)
         EEPROM.write (i, '`'); // Initialize SSID or Psswd into EEPROM
     for (int i = start_bit; i <= stop_bit || i <= strlen (char_data); i++)
@@ -84,6 +102,8 @@ void sys_Reset (bool clean) {
     memory_Manager (FREE_TIMER, MEM_TIMER, i); // Initialize Timer into EEPROM
   for (int i = 11; i <= 100; i++)
     EEPROM.write (i, '`'); // Initialize SSID, Psswd into EEPROM
+  for (int i = 300; i <= 360; i++)
+    EEPROM.write (i, '`'); // Initialize MQTT User and Key
   EEPROM.commit ();
   memory_Manager ("12345", MEM_SIGN, 0); // Write Signature into EEPROM
   memory_Manager ("00000000", MEM_IO_STATE, 0); // Initialize IO_State into EEPROM
@@ -122,7 +142,10 @@ int NET_Manager (int type) {
   return NET_FAIL;
 }
 
-
+/*
+ * internet_Time is based on NTP protocol to sync with internet time
+ * returns String internet time in success, NULL in failure
+*/
 String internet_Time () {
   if (!timeInit) {
     configTime(5 * 3600, 30 * 60, "pool.ntp.org","time.nist.gov");
@@ -153,7 +176,39 @@ String internet_Time () {
   return (String) (hh + ":" + mm + ":" + ss + ":" + dd);
 }
 
-/* IO_Manager sets the IO pins and calls memory_Manager to read & write config
+/*
+ * MQTT_Manager sends and receives message from/to Adafruit IO MQTT server
+ * if int msg = 0 then reads else writes
+ * returns NULL in failure and String result on success
+*/
+String MQTT_Manager (int msg) {
+  if (netType != NET_STA) return "";
+  if(! mqtt.ping()) mqtt.disconnect();
+  if (!mqtt.connected()) {
+    int count = 0;
+    int8_t ret;
+    while ((ret = mqtt.connect()) != 0) {
+      mqtt.disconnect();
+      if (count >= 20) return "";
+      count++;
+    }
+  }
+  if (msg == 0) { // Read from subscription if available
+    Adafruit_MQTT_Subscribe *subscription;
+    while ((subscription = mqtt.readSubscription(5000))) {
+      if (subscription == &to_esp) {
+        return (String) (char *) to_esp.lastread;
+      }
+    }
+  } else {//Publish changes
+    if (!from_esp.publish(msg, 1)) return "";
+    return (String) msg;  
+  }
+  return "";
+}
+
+/* 
+ *  IO_Manager sets the IO pins and calls memory_Manager to read & write config
  * stage - IO_TOGGLE for Toggle, IO_ON for on & IO_OFF for off for String data IOs
 */
 bool IO_Manager (String data, int stage) {
@@ -231,15 +286,20 @@ void setup() {
   pinMode (D7, OUTPUT);
   pinMode (D8, OUTPUT);
 
-  NET_Manager (NET_STA);
+  mqtt.subscribe(&to_esp);
 
+  
 }
 
-
+int i = 0;
 void loop() {
-  Serial.println (internet_Time ());
+  NET_Manager(NET_STA);
+  MQTT_Manager (i);
+  i++;
+  Serial.println (MQTT_Manager (0));
+  Serial.println (memory_Manager ("", MEM_MQTT_USER, 0));
+  Serial.println (memory_Manager ("", MEM_MQTT_KEY, 0));
   delay (1000);
-  
 }
 
 
