@@ -15,6 +15,7 @@
 #define MEM_IO_STATE 5
 #define MEM_MQTT_USER 6
 #define MEM_MQTT_KEY 7
+#define MEM_WLAN 8
 
 //By IO_Manager
 #define IO_TOGGLE 2
@@ -41,9 +42,12 @@ bool timeInit = false;
 #define MQTT_KEY "0e7a8026688646bb83111ad277fbfd49"
 WiFiClient mqtt_client;
 String memory_Manager (String, int, int);
+
 Adafruit_MQTT_Client mqtt (&mqtt_client, MQTT_SERVER, MQTT_PORT, MQTT_USER, MQTT_KEY);
 Adafruit_MQTT_Publish from_esp = Adafruit_MQTT_Publish (&mqtt, MQTT_USER "/feeds/from_esp_io_1");
 Adafruit_MQTT_Subscribe to_esp = Adafruit_MQTT_Subscribe (&mqtt, MQTT_USER "/feeds/to_esp_io_1");
+
+ESP8266WebServer server(80);
 
 
 /* 
@@ -67,6 +71,7 @@ String memory_Manager (String data, int type, int index) {
     case 5: start_bit = 291; stop_bit = 298; len = 8; break;
     case 6: start_bit = 301; stop_bit = 330; len = 30; break;
     case 7: start_bit = 331; stop_bit = 370; len = 40; break;
+    case 8: start_bit = 300; stop_bit = 300; len = 1; break;
   }
   if (data == "") {
     //Read Command
@@ -127,6 +132,7 @@ int NET_Manager (int type) {
       if (count++ >= 30) return NET_FAIL;
     }
     netType = NET_STA;
+    MDNS.begin("espio"); // Start the mDNS responder for espio.local
     return NET_STA;
   } else if (type == NET_AP) { // Turn on AP mode
     if (netType == NET_AP) return NET_AP;
@@ -135,6 +141,7 @@ int NET_Manager (int type) {
     netType = NET_FAIL;
     if (WiFi.softAP("IOT_ESP_IO-1", "nodemcuesp8266")) {
       netType = NET_AP; 
+      MDNS.begin("espio");
       return NET_AP;
     }
     
@@ -272,10 +279,51 @@ String timer_Manager (String data, int index) {
   return "";
 }
 
+/*
+ * Handlers for the client request body path 
+*/
+void handle_IO_Request () {
+  if (server.hasArg("plain") == false) {
+    server.send(200, "text/plain", "Body not received");
+    return;
+  }
+  String message = "" + server.arg("plain");
+  server.send(200, "text/plain", "Hello ESP8266 -- " + message);
+}
+void handle_Timer_Request () {
+  if (server.hasArg("plain") == false) {
+    server.send(200, "text/plain", "Body not received");
+    return;
+  }
+
+}
+void handle_LOG_Request () {
+  if (server.hasArg("plain") == false) {
+    server.send(200, "text/plain", "Body not received");
+    return;
+  }
+
+}
+void handle_Setup_Request () {
+  if (server.hasArg("plain") == false) {
+    server.send(200, "text/plain", "Body not received");
+    return;
+  }
+
+}
+void handle_Reset_Request () {
+  if (server.hasArg("plain") == false) {
+    server.send(200, "text/plain", "Body not received");
+    return;
+  }
+
+}
+
 
 void setup() {
   EEPROM.begin(512);
   Serial.begin(115200);
+  
   pinMode (D0, OUTPUT);
   pinMode (D1, OUTPUT);
   pinMode (D2, OUTPUT);
@@ -285,21 +333,21 @@ void setup() {
   pinMode (D6, OUTPUT);
   pinMode (D7, OUTPUT);
   pinMode (D8, OUTPUT);
-
+  
   mqtt.subscribe(&to_esp);
 
+  server.on ("/io", handle_IO_Request); 
+  server.on ("/timer", handle_Timer_Request);
+  server.on ("/log", handle_LOG_Request);
+  server.on ("/setup", handle_Setup_Request);
+  server.on ("/reset" handle_Reset_Request);
+  server.begin (); //Start the server
   
+  //NET_Manager (NET_AP);
 }
 
-int i = 0;
 void loop() {
-  NET_Manager(NET_STA);
-  MQTT_Manager (i);
-  i++;
-  Serial.println (MQTT_Manager (0));
-  Serial.println (memory_Manager ("", MEM_MQTT_USER, 0));
-  Serial.println (memory_Manager ("", MEM_MQTT_KEY, 0));
-  delay (1000);
+  server.handleClient();
 }
 
 
